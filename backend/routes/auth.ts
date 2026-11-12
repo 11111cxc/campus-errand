@@ -77,11 +77,11 @@ createUser({ studentId: '20230102', name: '王同学', password: '123456', role:
 
 const STUDENT_ID_RE = /^[A-Za-z0-9]{6,12}$/;
 
-// GET /api/auth/accounts —— 演示账号列表（只返回预置的两个）
+// GET /api/auth/accounts —— 演示账号列表（只返回预置的两个，且不含密码字段）
 router.get('/accounts', (_req: Request, res: Response) => {
   const demo = users
     .filter((u) => u.studentId === '20230101' || u.studentId === '20230102')
-    .map((u) => ({ ...toPublic(u), password: '123456', demo: true }));
+    .map((u) => ({ ...toPublic(u), demo: true }));
   res.json({ success: true, data: { accounts: demo } });
 });
 
