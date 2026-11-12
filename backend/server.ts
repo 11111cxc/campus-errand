@@ -6,6 +6,7 @@ import path from 'path';
 import passport from './config/passport';
 
 import aiRoutes from './routes/ai';
+import authRoutes from './routes/auth';
 import orderRoutes from './routes/orders';
 
 // Configuration
@@ -94,6 +95,7 @@ app.use(passport.initialize());
 
 app.use('/api/speech', speechRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
 
 /**

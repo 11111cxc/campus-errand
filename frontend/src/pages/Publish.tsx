@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Toaster } from '@/components/ui/sonner';
 import Navbar from '@/components/custom/Navbar';
 import OmniflowBadge from '@/components/custom/OmniflowBadge';
 import { CreateOrderRequest, OrderCategory } from '../../../shared/types/orders';
+import { useAuth } from '@/contexts/AuthContext';
 
 const categories: { value: OrderCategory; label: string }[] = [
   { value: 'express', label: '代取快递' },
@@ -14,6 +15,7 @@ const categories: { value: OrderCategory; label: string }[] = [
 
 export default function Publish() {
   const navigate = useNavigate();
+  const { user, token } = useAuth();
   const [form, setForm] = useState<CreateOrderRequest>({
     title: '',
     description: '',
@@ -38,8 +40,11 @@ export default function Publish() {
     try {
       const res = await fetch('/api/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ ...form, publisherName: user?.name || form.publisherName }),
       });
       const json = await res.json();
       if (json.message === '订单无法处理') {
@@ -56,6 +61,32 @@ export default function Publish() {
       setSubmitting(false);
     }
   };
+
+  if (!user || user.role !== 'requester') {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] text-[#1E293B]">
+        <Navbar />
+        <Toaster />
+        <div className="max-w-lg mx-auto px-4 py-24 text-center">
+          <h1 className="text-xl font-bold mb-2">
+            {user ? '当前账号是跑腿员，不能发布订单' : '发布订单需要登录'}
+          </h1>
+          <p className="text-sm text-[#64748B] mb-6">
+            {user
+              ? '需求方账号负责发单，跑腿员账号负责接单。请退出后用需求方账号登录。'
+              : '请先登录需求方账号，或在注册页选择"需求方"类型。'}
+          </p>
+          <Link
+            to={user ? '/' : '/auth'}
+            className="inline-flex px-6 py-3 bg-[#3B82F6] text-white font-bold rounded-xl hover:bg-[#2563EB] transition"
+          >
+            {user ? '返回任务大厅' : '去登录 / 注册'}
+          </Link>
+        </div>
+        <OmniflowBadge />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#1E293B]">

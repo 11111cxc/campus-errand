@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 const uuidv4 = () => randomUUID();
 import { Order, CreateOrderRequest, TakeOrderRequest } from '../../shared/types/orders';
+import { AuthedRequest, requireAuth, requireRole } from '../middleware/auth';
 
 const router = Router();
 
@@ -82,9 +83,25 @@ router.get('/', (_req: Request, res: Response) => {
   res.json({ success: true, data: { orders: visible } });
 });
 
+// GET /api/orders/mine —— 当前登录用户的"我发布的 / 我接的"
+router.get('/mine', requireAuth, (req: Request, res: Response) => {
+  const user = (req as AuthedRequest).user;
+  const published = orders.filter((o) => o.publisherId === user?.id);
+  const taking = orders.filter((o) => o.takerId === user?.id);
+  res.json({
+    success: true,
+    data: {
+      published,
+      taking,
+      user: { id: user?.id, name: user?.name, role: user?.role },
+    },
+  });
+});
+
 // POST /api/orders
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('requester'), (req: Request, res: Response) => {
   const body = req.body as CreateOrderRequest;
+  const user = (req as AuthedRequest).user;
   if (!body.title || !body.description || !body.fromLocation || !body.toLocation || !body.reward) {
     return res.status(400).json({ success: false, error: '请填写完整订单信息' });
   }
@@ -99,8 +116,8 @@ router.post('/', (req: Request, res: Response) => {
     reward: Number(body.reward),
     fromLocation: body.fromLocation,
     toLocation: body.toLocation,
-    publisherId: 'current-user',
-    publisherName: body.publisherName || '我',
+    publisherId: user?.id || 'current-user',
+    publisherName: user?.name || body.publisherName || '我',
     status: isBlocked ? 'blocked' : 'open',
     blocked: isBlocked,
     createdAt: new Date().toISOString(),
@@ -118,14 +135,20 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // POST /api/orders/:id/take
-router.post('/:id/take', (req: Request, res: Response) => {
+router.post('/:id/take', requireRole('runner'), (req: Request, res: Response) => {
   const order = orders.find((o) => o.id === req.params.id);
   if (!order) return res.status(404).json({ success: false, error: '订单不存在' });
   if (order.status !== 'open') return res.status(400).json({ success: false, error: '订单已被接取' });
 
+  const user = (req as AuthedRequest).user;
+  if (order.blocked) return res.status(400).json({ success: false, error: '该订单已拦截，不可接取' });
+  if (order.publisherId && order.publisherId === user?.id) {
+    return res.status(400).json({ success: false, error: '不能接自己发布的订单' });
+  }
+
   const body = req.body as TakeOrderRequest;
-  order.takerId = 'current-user';
-  order.takerName = body.takerName || '我';
+  order.takerId = user?.id || 'current-user';
+  order.takerName = user?.name || body.takerName || '我';
   order.status = 'delivering';
   order.updatedAt = new Date().toISOString();
 
@@ -133,10 +156,15 @@ router.post('/:id/take', (req: Request, res: Response) => {
 });
 
 // POST /api/orders/:id/complete
-router.post('/:id/complete', (req: Request, res: Response) => {
+router.post('/:id/complete', requireAuth, (req: Request, res: Response) => {
   const order = orders.find((o) => o.id === req.params.id);
   if (!order) return res.status(404).json({ success: false, error: '订单不存在' });
   if (order.status !== 'delivering') return res.status(400).json({ success: false, error: '订单状态不正确' });
+
+  const user = (req as AuthedRequest).user;
+  if (order.takerId !== user?.id) {
+    return res.status(403).json({ success: false, error: '只有接单人才能确认完成' });
+  }
 
   order.status = 'completed';
   order.updatedAt = new Date().toISOString();

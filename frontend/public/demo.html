@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>演示用快速登录 · 校园跑腿通</title>
+    <style>
+      body {
+        font-family: "Microsoft YaHei", system-ui, sans-serif;
+        background: #f8fafc;
+        color: #1e293b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+      }
+      .box {
+        text-align: center;
+      }
+      .box p {
+        font-size: 14px;
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <p id="msg">正在以演示账号登录…</p>
+    </div>
+    <script>
+      // 仅供课堂演示与录屏使用的快速登录入口：
+      // 只允许两个预置演示账号，登录后写入本地登录态再跳转
+      const allowed = { '20230101': 'requester', '20230102': 'runner' };
+      const params = new URLSearchParams(location.search);
+      const studentId = params.get('student') || '20230101';
+      const target = params.get('to') || '';
+      const msg = document.getElementById('msg');
+
+      if (!allowed[studentId]) {
+        msg.textContent = '只支持演示账号 20230101 或 20230102';
+      } else {
+        fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: studentId, password: '123456' }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j.success) {
+              localStorage.setItem('token', j.data.token);
+              localStorage.setItem('authUser', JSON.stringify(j.data.user));
+              location.replace('/#/' + target);
+            } else {
+              msg.textContent = '登录失败：' + (j.error || '未知错误');
+            }
+          })
+          .catch(function () {
+            msg.textContent = '网络错误，请确认后端已启动';
+          });
+      }
+    </script>
+  </body>
+</html>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ShieldCheck, Zap, Lock, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import OmniflowBadge from '@/components/custom/OmniflowBadge';
@@ -7,10 +7,13 @@ import { Toaster } from '@/components/ui/sonner';
 import Navbar from '@/components/custom/Navbar';
 import OrderCard from '@/components/custom/OrderCard';
 import { Order } from '../../../shared/types/orders';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Category = 'all' | 'express' | 'canteen';
 
 export default function Index() {
+  const navigate = useNavigate();
+  const { user, token } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState<Category>('all');
@@ -30,11 +33,23 @@ export default function Index() {
   useEffect(() => { fetchOrders(); }, []);
 
   const handleTake = async (id: string) => {
+    if (!user) {
+      toast.error('请先登录跑腿员账号再接单');
+      navigate('/auth');
+      return;
+    }
+    if (user.role !== 'runner') {
+      toast.error('当前是需求方账号，接单需要用跑腿员账号登录');
+      return;
+    }
     try {
       const res = await fetch(`/api/orders/${id}/take`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ takerName: '我' }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ takerName: user.name }),
       });
       const json = await res.json();
       if (json.success) {
@@ -46,6 +61,19 @@ export default function Index() {
     } catch {
       toast.error('网络错误，请重试');
     }
+  };
+
+  const goPublish = () => {
+    if (!user) {
+      toast.error('发布订单请先登录需求方账号');
+      navigate('/auth');
+      return;
+    }
+    if (user.role !== 'requester') {
+      toast.error('当前是跑腿员账号，发布订单需要需求方账号');
+      return;
+    }
+    navigate('/publish');
   };
 
   const filtered = orders.filter((o) => {
@@ -73,12 +101,12 @@ export default function Index() {
             <div className="relative z-10">
               <h1 className="text-3xl font-bold mb-2">同学，今天需要帮忙吗？</h1>
               <p className="text-blue-100 mb-6 max-w-md">安全、快速、隐私保护。校园内的互助配送平台，让生活更简单。</p>
-              <Link
-                to="/publish"
+              <button
+                onClick={goPublish}
                 className="inline-flex items-center gap-2 bg-white text-[#3B82F6] px-6 py-3 rounded-xl font-bold hover:shadow-lg transition-all active:scale-95"
               >
                 立即发布订单 <ChevronRight size={16} />
-              </Link>
+              </button>
             </div>
             <div className="absolute right-[-20px] bottom-[-20px] opacity-10">
               <svg width="200" height="200" viewBox="0 0 24 24" fill="currentColor">
@@ -91,12 +119,14 @@ export default function Index() {
           <div className="bg-white rounded-2xl p-6 border border-[#E2E8F0] shadow-sm">
             <h3 className="font-bold mb-4 flex items-center gap-2">
               <span className="w-1.5 h-6 bg-[#F59E0B] rounded-full" />
-              我的信用概览
+              {user ? `${user.name} · 我的信用概览` : '我的信用概览'}
             </h3>
             <div className="flex items-center justify-between mb-6">
               <div>
-                <div className="text-4xl font-bold text-[#1E293B]">98</div>
-                <div className="text-sm text-[#64748B]">信用等级：极好</div>
+                <div className="text-4xl font-bold text-[#1E293B]">{user ? user.creditScore : '--'}</div>
+                <div className="text-sm text-[#64748B]">
+                  {user ? `账号类型：${user.role === 'runner' ? '跑腿员' : '需求方'}` : '登录后查看'}
+                </div>
               </div>
               <div className="w-16 h-16 rounded-full border-4 border-[#22C55E] flex items-center justify-center">
                 <ShieldCheck size={28} className="text-[#22C55E]" />
